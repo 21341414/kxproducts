@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NRF24KXB JAMMER / khxngvng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #04080c;
+    --bg2:      #070d12;
+    --panel:    #0a1018;
+    --border:   #142030;
+    --accent:   #00e5ff;
+    --accent2:  #ff2244;
+    --accent3:  #00ff88;
+    --dim:      #1e3048;
+    --text:     #8ab0c8;
+    --text-dim: #3a5870;
+    --text-hi:  #d8eeff;
+    --glow-c:   rgba(0,229,255,0.10);
+    --glow-r:   rgba(255,34,68,0.10);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* noise */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:900; opacity:.7;
+  }
+
+  /* scanlines */
+  body::after {
+    content:'';
+    position:fixed; inset:0;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);
+    pointer-events:none; z-index:901;
+  }
+
+  /* ── HEADER ──────────────────────────── */
+  header {
+    position: relative;
+    padding: 70px 64px 56px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .hdr-glow {
+    position:absolute;
+    top:-300px; right:-200px;
+    width:800px; height:800px;
+    background: radial-gradient(circle, rgba(0,229,255,0.05) 0%, transparent 65%);
+    pointer-events:none;
+  }
+
+  .hdr-glow2 {
+    position:absolute;
+    bottom:-400px; left:-100px;
+    width:600px; height:600px;
+    background: radial-gradient(circle, rgba(255,34,68,0.04) 0%, transparent 65%);
+    pointer-events:none;
+  }
+
+  .kicker {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .35em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin-bottom: 18px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .kicker::before { content:''; width:28px; height:1px; background:var(--accent2); }
+
+  h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(56px, 9vw, 130px);
+    line-height: .88;
+    letter-spacing: .03em;
+    color: var(--text-hi);
+  }
+  h1 .hi { color: var(--accent); }
+  h1 .out {
+    -webkit-text-stroke: 1px var(--dim);
+    color: transparent;
+  }
+
+  .hdr-meta {
+    display:flex; gap:36px; flex-wrap:wrap;
+    margin-top:30px;
+  }
+  .m-item { display:flex; flex-direction:column; gap:3px; }
+  .m-lbl {
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.3em;
+    text-transform:uppercase; color:var(--text-dim);
+  }
+  .m-val {
+    font-family:'Share Tech Mono',monospace;
+    font-size:13px; color:var(--accent);
+  }
+
+  .pulse { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent2); margin-right:5px; animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* ── LAYOUT ──────────────────────────── */
+  main { padding:48px 64px; max-width:1440px; margin:0 auto; }
+
+  .row   { display:grid; gap:2px; margin-bottom:2px; }
+  .col2  { grid-template-columns:1fr 1fr; }
+  .col3  { grid-template-columns:1fr 1fr 1fr; }
+  .col13 { grid-template-columns:1.3fr 1fr; }
+  .col31 { grid-template-columns:1fr 1.5fr; }
+
+  /* ── PANEL ───────────────────────────── */
+  .panel {
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:26px 30px;
+    position:relative; overflow:hidden;
+    transition:border-color .3s;
+    animation: fadeUp .5s ease both;
+  }
+  .panel:hover { border-color: var(--dim); }
+  .panel::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg,transparent,var(--accent),transparent);
+    opacity:0; transition:opacity .3s;
+  }
+  .panel:hover::before { opacity:.5; }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .panel:nth-child(1){animation-delay:.04s}
+  .panel:nth-child(2){animation-delay:.09s}
+  .panel:nth-child(3){animation-delay:.14s}
+
+  .p-label {
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.3em;
+    text-transform:uppercase; color:var(--text-dim);
+    margin-bottom:14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .p-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  .p-title {
+    font-weight:800; font-size:18px;
+    text-transform:uppercase; letter-spacing:.06em;
+    color:var(--text-hi); margin-bottom:12px;
+  }
+  .p-body {
+    font-size:15px; font-weight:400;
+    line-height:1.75; color:var(--text);
+  }
+
+  /* ── FREQUENCY CANVAS ────────────────── */
+  #specCanvas {
+    width:100%; height:220px;
+    display:block;
+    background: transparent;
+  }
+
+  .canvas-wrap {
+    position:relative;
+    background:#04080c;
+    border:1px solid var(--border);
+    overflow:hidden;
+    padding: 0;
+  }
+
+  .freq-legend {
+    display:flex; gap:20px; flex-wrap:wrap;
+    padding:14px 20px;
+    border-top:1px solid var(--border);
+    background:var(--panel);
+  }
+  .leg-item {
+    display:flex; align-items:center; gap:8px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--text-dim);
+  }
+  .leg-dot { width:10px; height:10px; border-radius:50%; }
+
+  /* ── MODE CARDS ──────────────────────── */
+  .mode-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:2px;
+  }
+
+  .mode-card {
+    background:var(--bg2);
+    border:1px solid var(--border);
+    padding:22px 24px;
+    position:relative;
+    transition:border-color .3s, background .3s;
+    cursor:default;
+  }
+  .mode-card:hover { background:#0c1520; border-color:var(--dim); }
+
+  .mode-num {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; letter-spacing:.25em;
+    color:var(--text-dim); margin-bottom:8px;
+  }
+  .mode-name {
+    font-family:'Bebas Neue',sans-serif;
+    font-size:30px; letter-spacing:.05em;
+    color:var(--text-hi); margin-bottom:4px;
+  }
+  .mode-ch {
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; color:var(--accent);
+    margin-bottom:10px;
+  }
+  .mode-desc {
+    font-size:13px; font-weight:400;
+    line-height:1.6; color:var(--text-dim);
+  }
+  .mode-badge {
+    position:absolute; top:18px; right:18px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.2em;
+    text-transform:uppercase;
+    padding:3px 9px; border:1px solid;
+  }
+  .b-red   { color:var(--accent2); border-color:rgba(255,34,68,.35); background:rgba(255,34,68,.06); }
+  .b-cyan  { color:var(--accent);  border-color:rgba(0,229,255,.35);  background:rgba(0,229,255,.06); }
+  .b-green { color:var(--accent3); border-color:rgba(0,255,136,.35); background:rgba(0,255,136,.06); }
+  .b-dim   { color:var(--text-dim); border-color:var(--border); background:transparent; }
+
+  /* ── FREQ EXPLANATION ────────────────── */
+  .freq-explain {
+    display:flex; flex-direction:column; gap:0;
+  }
+  .frow {
+    display:flex; align-items:flex-start; gap:16px;
+    padding:14px 0;
+    border-bottom:1px solid #0c161e;
+  }
+  .frow:last-child { border-bottom:none; }
+  .frow-freq {
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px; color:var(--accent);
+    flex:0 0 120px; padding-top:2px;
+  }
+  .frow-name {
+    font-weight:700; font-size:14px;
+    text-transform:uppercase; letter-spacing:.05em;
+    color:var(--text-hi); margin-bottom:3px;
+  }
+  .frow-body {
+    font-size:13px; font-weight:400;
+    line-height:1.6; color:var(--text-dim);
+  }
+
+  /* ── EXPLAIN PANEL ───────────────────── */
+  .explain-block {
+    background:#05090e;
+    border:1px solid var(--border);
+    padding:28px 32px;
+    position:relative; overflow:hidden;
+  }
+
+  .explain-block::before {
+    content:'HOW JAMMING WORKS';
+    position:absolute;
+    top:20px; right:24px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.3em;
+    color:var(--text-dim); opacity:.4;
+  }
+
+  .explain-section {
+    margin-bottom:28px;
+  }
+  .explain-section:last-child { margin-bottom:0; }
+
+  .es-title {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; letter-spacing:.3em;
+    text-transform:uppercase; color:var(--accent2);
+    margin-bottom:10px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .es-title::after { content:''; flex:1; height:1px; background:rgba(255,34,68,.2); }
+
+  .es-body {
+    font-size:15px; font-weight:400;
+    line-height:1.8; color:var(--text);
+  }
+  .es-body strong { color:var(--text-hi); font-weight:700; }
+  .es-body code {
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px; color:var(--accent);
+    background:rgba(0,229,255,.07);
+    padding:1px 6px; border:1px solid rgba(0,229,255,.15);
+  }
+
+  /* ── CODE PANEL ──────────────────────── */
+  .code-wrap {
+    background:#030608;
+    border:1px solid var(--border);
+    overflow:hidden;
+  }
+  .code-hdr {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 22px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel);
+  }
+  .c-fname {
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; color:var(--text-dim);
+    display:flex; align-items:center; gap:8px;
+  }
+  .c-fname em { color:var(--accent); font-style:normal; }
+  .c-dots { display:flex; gap:5px; }
+  .dot { width:9px; height:9px; border-radius:50%; }
+  .dr{background:#ff5f56} .dy{background:#ffbd2e} .dg{background:#27c93f}
+
+  pre {
+    padding:26px 28px;
+    overflow-x:auto;
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px; line-height:1.85;
+    color:#5a7a90; tab-size:2;
+  }
+  .ck  { color:#ff6b7a; }   /* keyword */
+  .ct  { color:#ffb347; }   /* type */
+  .cf  { color:#47c8ff; }   /* function */
+  .cs  { color:#a8ff78; }   /* string */
+  .cn  { color:#e8ff47; }   /* number */
+  .cc  { color:#2d4a60; }   /* comment */
+  .cm  { color:#ff8fa8; }   /* macro */
+  .cv  { color:#c8d8e8; }   /* variable */
+
+  /* ── TABLE ───────────────────────────── */
+  table { width:100%; border-collapse:collapse; font-family:'Share Tech Mono',monospace; font-size:12px; }
+  th {
+    text-align:left; font-size:8px; letter-spacing:.25em;
+    text-transform:uppercase; color:var(--text-dim);
+    padding:0 16px 12px 0; font-weight:400;
+    border-bottom:1px solid var(--border);
+  }
+  td { padding:11px 16px 11px 0; border-bottom:1px solid #0a1520; vertical-align:top; color:var(--text); }
+  tr:last-child td { border-bottom:none; }
+  td:first-child { color:var(--accent); }
+  td:nth-child(2) { color:var(--text-hi); }
+
+  .badge {
+    display:inline-block;
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.15em;
+    text-transform:uppercase; padding:2px 7px; border:1px solid;
+  }
+
+  /* ── STAT PANEL ──────────────────────── */
+  .stat-panel { display:flex; flex-direction:column; justify-content:center; }
+  .stat-n {
+    font-family:'Bebas Neue',sans-serif;
+    font-size:80px; line-height:.9;
+    letter-spacing:.02em; color:var(--text-hi);
+  }
+  .stat-n .u { font-size:36px; color:var(--accent2); }
+  .stat-lbl {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; letter-spacing:.25em;
+    text-transform:uppercase; color:var(--text-dim);
+    margin-top:10px;
+  }
+
+  /* ── WIRING ──────────────────────────── */
+  .wire-row {
+    display:flex; align-items:center; gap:14px;
+    padding:11px 14px; margin-bottom:2px;
+    background:rgba(255,255,255,.015);
+    border-left:3px solid;
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+  }
+  .wc { flex:0 0 80px; font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); }
+  .wa { color:var(--dim); }
+  .wd { color:var(--text-hi); flex:0 0 100px; }
+  .wn { color:var(--text-dim); flex:1; text-align:right; font-size:11px; }
+
+  /* ── FOOTER ──────────────────────────── */
+  footer {
+    border-top:1px solid var(--border);
+    padding:28px 64px;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
+  }
+  .f-sig { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--text-dim); letter-spacing:.1em; }
+  .f-sig span { color:var(--accent2); }
+  .f-tags { display:flex; gap:8px; flex-wrap:wrap; }
+  .f-tag {
+    font-family:'Share Tech Mono',monospace;
+    font-size:8px; letter-spacing:.15em; text-transform:uppercase;
+    color:var(--text-dim); border:1px solid var(--border); padding:3px 9px;
+  }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width:3px; height:3px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--dim); }
+
+  @media(max-width:860px) {
+    header,main,footer { padding-left:24px; padding-right:24px; }
+    .col2,.col3,.col13,.col31,.mode-grid { grid-template-columns:1fr; }
+    h1 { font-size:56px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-glow"></div>
+  <div class="hdr-glow2"></div>
+  <div class="kicker">project / rf hardware</div>
+  <h1>NRF24<span class="hi">KXB</span><br><span class="out">JAMMER</span></h1>
+  <div class="hdr-meta">
+    <div class="m-item"><span class="m-lbl">author</span><span class="m-val">khxngvng</span></div>
+    <div class="m-item"><span class="m-lbl">mcu</span><span class="m-val">Arduino Uno</span></div>
+    <div class="m-item"><span class="m-lbl">rf module</span><span class="m-val">nRF24L01+</span></div>
+    <div class="m-item"><span class="m-lbl">adapter</span><span class="m-val">5V Adapter Module</span></div>
+    <div class="m-item"><span class="m-lbl">band</span><span class="m-val">2.400 – 2.525 GHz</span></div>
+    <div class="m-item"><span class="m-lbl">modes</span><span class="m-val"><span class="pulse"></span>4 active</span></div>
+  </div>
+</header>
+
+<main>
+
+  <!-- OVERVIEW + EXPLAIN ROW -->
+  <div class="row col13" style="margin-bottom:2px;">
+    <div class="explain-block panel" style="padding:30px 34px;">
+      <div class="p-label">01 — how it works</div>
+
+      <div class="explain-section">
+        <div class="es-title">signal interference — the concept</div>
+        <div class="es-body">
+          bluetooth and wifi both operate in the <strong>2.4 GHz ISM band</strong> — a shared, unlicensed slice of spectrum from roughly <strong>2400 MHz to 2525 MHz</strong>. devices communicate by broadcasting modulated signals on specific channels within that band. a jammer works by <strong>flooding those same channels with a continuous carrier signal</strong> — raw RF energy with no meaningful data. legitimate devices trying to transmit find their signal buried under noise and can't establish or maintain a connection.
+        </div>
+      </div>
+
+      <div class="explain-section">
+        <div class="es-title">why the nrf24l01+ works for this</div>
+        <div class="es-body">
+          the nRF24L01+ is a 2.4 GHz transceiver with <strong>1 MHz channel spacing</strong>, covering channels 0–125 (2400–2525 MHz). it supports <code>startConstCarrier()</code> — a mode that emits a <strong>raw, unmodulated continuous wave</strong> at maximum power. by rapidly cycling <code>setChannel()</code> across target frequencies faster than receiver timeout windows, it saturates the band. with SPI overclocked to 8 MHz (<code>SPI_CLOCK_DIV2</code>), channel switches happen at maximum speed.
+        </div>
+      </div>
+
+      <div class="explain-section">
+        <div class="es-title">bluetooth channel mapping</div>
+        <div class="es-body">
+          bluetooth classic hops across <strong>79 channels</strong> (2402–2480 MHz, 1 MHz apart). BLE uses <strong>40 channels</strong> but advertises only on <strong>3 fixed channels: 37, 38, 39</strong> (2402, 2426, 2480 MHz). to disrupt BLE pairing and discovery, you only need to saturate those three. wifi 2.4 GHz uses <strong>11–13 overlapping 22 MHz-wide channels</strong> — but only channels <strong>1, 6, and 11</strong> are non-overlapping and most commonly used.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="p-label">02 — hardware</div>
+      <div class="p-title">Components</div>
+      <div class="freq-explain">
+        <div class="frow">
+          <div class="frow-freq">Arduino Uno</div>
+          <div>
+            <div class="frow-name">Microcontroller</div>
+            <div class="frow-body">runs the jam logic, button input, lcd driver, and spi master. SPI overclocked to 8 MHz via <code style="font-family:monospace;font-size:11px;color:var(--accent)">SPI_CLOCK_DIV2</code> to maximize channel-switch throughput.</div>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="frow-freq">nRF24L01+</div>
+          <div>
+            <div class="frow-name">RF Transceiver</div>
+            <div class="frow-body">2.4 GHz module. CRC disabled, auto-ack off, retries 0, payload 5B, address width 3B. PA level MAX. continuous carrier mode active.</div>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="frow-freq">5V Adapter</div>
+          <div>
+            <div class="frow-name">Power Module</div>
+            <div class="frow-body">the nRF24L01+ draws significant current at PA_MAX — the adapter stabilizes 3.3V supply and prevents brownouts that corrupt SPI on the bare arduino 3.3V pin.</div>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="frow-freq">LCD I2C</div>
+          <div>
+            <div class="frow-name">16×2 Display</div>
+            <div class="frow-body">address 0x27. shows current mode and target channels. updated only on button press to avoid loop overhead slowing channel cycling.</div>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="frow-freq">Button @ A2</div>
+          <div>
+            <div class="frow-name">Mode Toggle</div>
+            <div class="frow-body">INPUT_PULLUP, active-low. cycles through 4 modes with 300ms debounce. no interrupts used — polled each loop iteration.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPECTRUM VISUALIZER -->
+  <div class="canvas-wrap" style="margin-bottom:2px;">
+    <div class="p-label" style="padding:16px 20px 0; margin-bottom:0; background:var(--panel); border-bottom:1px solid var(--border);">03 — frequency overlap visualizer &nbsp;<span style="color:var(--accent);font-size:9px;font-family:'Share Tech Mono',monospace;">ANIMATED · 2.400–2.500 GHz</span></div>
+    <canvas id="specCanvas"></canvas>
+    <div class="freq-legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#00e5ff;opacity:.8"></div>bluetooth 79ch sweep</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ff2244;opacity:.9"></div>ble advertising ch 37/38/39</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#00ff88;opacity:.7"></div>wifi ch 1 / 6 / 11</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#ffdd00;opacity:.6"></div>jammer continuous carrier</div>
+      <div class="leg-item" style="margin-left:auto; color:var(--text-dim); font-size:9px;">signals overlap → receiver desync</div>
+    </div>
+  </div>
+
+  <!-- JAM MODES -->
+  <div class="panel" style="margin-bottom:2px; padding:26px 30px;">
+    <div class="p-label">04 — jam modes</div>
+    <div class="mode-grid">
+      <div class="mode-card">
+        <span class="mode-badge b-red">AGGRESSIVE</span>
+        <div class="mode-num">mode 0</div>
+        <div class="mode-name">FULL SPECTRUM</div>
+        <div class="mode-ch">CH 0–79 + BLE 37, 38, 39</div>
+        <div class="mode-desc">sweeps all 79 bluetooth channels sequentially then hits the 3 BLE advertising channels unrolled. covers everything in the 2.4 GHz band including bluetooth classic, BLE, and partial wifi overlap.</div>
+      </div>
+      <div class="mode-card">
+        <span class="mode-badge b-cyan">TARGETED</span>
+        <div class="mode-num">mode 1</div>
+        <div class="mode-name">BLE ONLY</div>
+        <div class="mode-ch">CH 37, 38, 39 (2402 / 2426 / 2480 MHz)</div>
+        <div class="mode-desc">maximum throughput on only the 3 BLE advertising channels. unrolled — no loop overhead. fastest possible cycling rate. disrupts BLE pairing, discovery, and beacons without touching wifi or classic bt.</div>
+      </div>
+      <div class="mode-card">
+        <span class="mode-badge b-green">TARGETED</span>
+        <div class="mode-num">mode 2</div>
+        <div class="mode-name">WIFI 2.4 GHz</div>
+        <div class="mode-ch">CH 12, 37, 62 → 2412 / 2437 / 2462 MHz</div>
+        <div class="mode-desc">targets center frequencies of wifi ch 1, 6, and 11 — the 3 non-overlapping standard channels. nrf channel offset: nrf_ch = (freq_mhz − 2400). disrupts most consumer 2.4 GHz wifi infrastructure.</div>
+      </div>
+      <div class="mode-card">
+        <span class="mode-badge b-dim">COSMETIC</span>
+        <div class="mode-num">mode 3</div>
+        <div class="mode-name">CREDIT MODE</div>
+        <div class="mode-ch">Same as mode 0</div>
+        <div class="mode-desc">functionally identical to mode 0 — full spectrum sweep. LCD shows the authorship screen instead of mode info. exists as a signature / attribution display while keeping the jammer active.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANNEL TABLE + WIRING -->
+  <div class="row col2" style="margin-bottom:2px;">
+    <div class="panel">
+      <div class="p-label">05 — channel reference</div>
+      <div class="p-title">Freq → nRF Channel Map</div>
+      <table>
+        <thead>
+          <tr><th>protocol</th><th>freq (MHz)</th><th>nrf ch</th><th>role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>BLE adv</td><td>2402</td><td>2</td><td><span class="badge b-red">advertising</span></td></tr>
+          <tr><td>BLE adv</td><td>2426</td><td>26</td><td><span class="badge b-red">advertising</span></td></tr>
+          <tr><td>BLE adv</td><td>2480</td><td>80</td><td><span class="badge b-red">advertising</span></td></tr>
+          <tr><td>BLE adv (mapped)</td><td>code uses ch 37,38,39</td><td>37–39</td><td><span class="badge b-cyan">code offset</span></td></tr>
+          <tr><td>WiFi ch 1</td><td>2412</td><td>12</td><td><span class="badge b-green">non-overlap</span></td></tr>
+          <tr><td>WiFi ch 6</td><td>2437</td><td>37</td><td><span class="badge b-green">non-overlap</span></td></tr>
+          <tr><td>WiFi ch 11</td><td>2462</td><td>62</td><td><span class="badge b-green">non-overlap</span></td></tr>
+          <tr><td>BT Classic</td><td>2402–2480</td><td>2–80</td><td><span class="badge" style="color:var(--text-dim);border-color:var(--border)">79ch sweep</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <div class="p-label">06 — wiring</div>
+      <div class="p-title">SPI + I2C Connections</div>
+      <div class="wire-row" style="border-color:#ff2244">
+        <span class="wc">CE</span><span class="wa">→</span><span class="wd">D9</span><span class="wn">nRF chip enable</span>
+      </div>
+      <div class="wire-row" style="border-color:#00e5ff">
+        <span class="wc">CSN</span><span class="wa">→</span><span class="wd">D10</span><span class="wn">nRF chip select</span>
+      </div>
+      <div class="wire-row" style="border-color:#ffb347">
+        <span class="wc">MOSI</span><span class="wa">→</span><span class="wd">D11</span><span class="wn">SPI data out</span>
+      </div>
+      <div class="wire-row" style="border-color:#a8ff78">
+        <span class="wc">MISO</span><span class="wa">→</span><span class="wd">D12</span><span class="wn">SPI data in</span>
+      </div>
+      <div class="wire-row" style="border-color:#e8ff47">
+        <span class="wc">SCK</span><span class="wa">→</span><span class="wd">D13</span><span class="wn">SPI clock</span>
+      </div>
+      <div class="wire-row" style="border-color:#ff5588">
+        <span class="wc">VCC</span><span class="wa">→</span><span class="wd">5V adapter</span><span class="wn">NOT direct 3.3V pin</span>
+      </div>
+      <div class="wire-row" style="border-color:#444">
+        <span class="wc">GND</span><span class="wa">→</span><span class="wd">GND</span><span class="wn">common ground</span>
+      </div>
+      <div class="wire-row" style="border-color:#8877ff; margin-top:8px;">
+        <span class="wc">SDA</span><span class="wa">→</span><span class="wd">A4</span><span class="wn">LCD I2C data</span>
+      </div>
+      <div class="wire-row" style="border-color:#6699ff">
+        <span class="wc">SCL</span><span class="wa">→</span><span class="wd">A5</span><span class="wn">LCD I2C clock</span>
+      </div>
+      <div class="wire-row" style="border-color:#00ff88">
+        <span class="wc">button</span><span class="wa">→</span><span class="wd">A2</span><span class="wn">INPUT_PULLUP, active-low</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL CODE -->
+  <div class="code-wrap" style="margin-bottom:2px;">
+    <div class="code-hdr">
+      <div class="c-dots"><div class="dot dr"></div><div class="dot dy"></div><div class="dot dg"></div></div>
+      <div class="c-fname">NRF24KXBJammer.ino &nbsp;/ <em>arduino uno</em></div>
+      <div class="c-fname" style="font-size:10px;">RF24 lib &nbsp;·&nbsp; SPI built-in &nbsp;·&nbsp; LiquidCrystal_I2C</div>
+    </div>
+    <pre><span class="cc">/*
+ * NRF24KXB JAMMER — khxngvng
+ * arduino uno + nRF24L01+ + 5V adapter + 16x2 LCD I2C
+ */</span>
+<span class="cm">#include</span> <span class="cs">"RF24.h"</span>
+<span class="cm">#include</span> <span class="cs">&lt;SPI.h&gt;</span>
+<span class="cm">#include</span> <span class="cs">&lt;LiquidCrystal_I2C.h&gt;</span>
+
+<span class="ct">LiquidCrystal_I2C</span> <span class="cv">lcd</span>(<span class="cn">0x27</span>, <span class="cn">16</span>, <span class="cn">2</span>);
+<span class="ct">RF24</span> <span class="cv">radio</span>(<span class="cn">9</span>, <span class="cn">10</span>);                  <span class="cc">// ce=9, csn=10</span>
+
+<span class="ct">int</span>          <span class="cv">jamMode</span>    <span class="ck">=</span> <span class="cn">0</span>;         <span class="cc">// 0=full 1=ble 2=wifi 3=credit</span>
+<span class="ck">const</span> <span class="ct">int</span>    <span class="cv">buttonPin</span> <span class="ck">=</span> <span class="cn">A2</span>;
+<span class="ct">byte</span>         <span class="cv">i</span>         <span class="ck">=</span> <span class="cn">45</span>;         <span class="cc">// initial channel</span>
+<span class="ct">unsigned int</span> <span class="cv">flag</span>      <span class="ck">=</span> <span class="cn">0</span>;
+
+<span class="ct">void</span> <span class="cf">setup</span>() {
+  <span class="cf">Serial.begin</span>(<span class="cn">115200</span>);
+
+  SPI.<span class="cf">setClockDivider</span>(<span class="cn">SPI_CLOCK_DIV2</span>); <span class="cc">// 8 MHz — max spi speed</span>
+
+  lcd.<span class="cf">init</span>();
+  lcd.<span class="cf">backlight</span>();
+  <span class="cf">pinMode</span>(<span class="cv">buttonPin</span>, INPUT_PULLUP);
+
+  lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>, <span class="cn">0</span>); lcd.<span class="cf">print</span>(<span class="cs">"nRF24 JAMMER"</span>);
+  lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>, <span class="cn">1</span>); lcd.<span class="cf">print</span>(<span class="cs">"     by KHXNGVNG"</span>);
+
+  <span class="ck">if</span> (radio.<span class="cf">begin</span>()) {
+    <span class="cf">delay</span>(<span class="cn">20</span>);
+    <span class="cf">Serial.println</span>(<span class="cs">"radio init!!!"</span>);
+    radio.<span class="cf">setAutoAck</span>(<span class="ck">false</span>);
+    radio.<span class="cf">stopListening</span>();
+    radio.<span class="cf">setRetries</span>(<span class="cn">0</span>, <span class="cn">0</span>);
+    radio.<span class="cf">setPayloadSize</span>(<span class="cn">5</span>);
+    radio.<span class="cf">setAddressWidth</span>(<span class="cn">3</span>);
+    radio.<span class="cf">setPALevel</span>(RF24_PA_MAX, <span class="ck">true</span>);
+    radio.<span class="cf">setDataRate</span>(RF24_2MBPS);
+    radio.<span class="cf">setCRCLength</span>(RF24_CRC_DISABLED);
+    radio.<span class="cf">printPrettyDetails</span>();
+    radio.<span class="cf">startConstCarrier</span>(RF24_PA_MAX, <span class="cv">i</span>);
+  } <span class="ck">else</span> {
+    <span class="cf">Serial.println</span>(<span class="cs">"failed to init radio!!"</span>);
+  }
+}
+
+<span class="ct">void</span> <span class="cf">loop</span>() {
+
+  <span class="cc">// button: cycle mode, update lcd once, debounce 300ms ──────</span>
+  <span class="ck">if</span> (<span class="cf">digitalRead</span>(<span class="cv">buttonPin</span>) <span class="ck">==</span> LOW) {
+    <span class="cv">jamMode</span>++;
+    <span class="ck">if</span> (<span class="cv">jamMode</span> <span class="ck">&gt;</span> <span class="cn">3</span>) <span class="cv">jamMode</span> <span class="ck">=</span> <span class="cn">0</span>;
+    lcd.<span class="cf">clear</span>();
+    lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>, <span class="cn">0</span>);
+    <span class="ck">if</span>      (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">0</span>) { lcd.<span class="cf">print</span>(<span class="cs">"MODE : FULL"</span>);    lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>,<span class="cn">1</span>); lcd.<span class="cf">print</span>(<span class="cs">"CH : 0-79 + BLE"</span>); }
+    <span class="ck">else if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">1</span>) { lcd.<span class="cf">print</span>(<span class="cs">"MODE : BLE ONLY"</span>); lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>,<span class="cn">1</span>); lcd.<span class="cf">print</span>(<span class="cs">"CH : 37, 38, 39"</span>); }
+    <span class="ck">else if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">2</span>) { lcd.<span class="cf">print</span>(<span class="cs">"MODE : WIFI"</span>);    lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>,<span class="cn">1</span>); lcd.<span class="cf">print</span>(<span class="cs">"CH : 1, 6, 11"</span>); }
+    <span class="ck">else if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">3</span>) { lcd.<span class="cf">print</span>(<span class="cs">"nRF24 JAMMER"</span>);  lcd.<span class="cf">setCursor</span>(<span class="cn">0</span>,<span class="cn">1</span>); lcd.<span class="cf">print</span>(<span class="cs">"     by KHXNGVNG"</span>); }
+    <span class="cf">delay</span>(<span class="cn">300</span>);
+  }
+
+  <span class="cc">// jam logic ────────────────────────────────────────────────</span>
+  <span class="ck">if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">0</span> <span class="ck">||</span> <span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">3</span>) {
+    <span class="ck">for</span> (<span class="ct">byte</span> <span class="cv">c</span> <span class="ck">=</span> <span class="cn">0</span>; <span class="cv">c</span> <span class="ck">&lt;</span> <span class="cn">79</span>; <span class="cv">c</span>++) radio.<span class="cf">setChannel</span>(<span class="cv">c</span>);
+    radio.<span class="cf">setChannel</span>(<span class="cn">37</span>);  <span class="cc">// unrolled BLE</span>
+    radio.<span class="cf">setChannel</span>(<span class="cn">38</span>);
+    radio.<span class="cf">setChannel</span>(<span class="cn">39</span>);
+  }
+  <span class="ck">else if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">1</span>) {
+    radio.<span class="cf">setChannel</span>(<span class="cn">37</span>);  <span class="cc">// BLE only — no loop overhead</span>
+    radio.<span class="cf">setChannel</span>(<span class="cn">38</span>);
+    radio.<span class="cf">setChannel</span>(<span class="cn">39</span>);
+  }
+  <span class="ck">else if</span> (<span class="cv">jamMode</span> <span class="ck">==</span> <span class="cn">2</span>) {
+    radio.<span class="cf">setChannel</span>(<span class="cn">12</span>);  <span class="cc">// WiFi ch1  → 2412 MHz</span>
+    radio.<span class="cf">setChannel</span>(<span class="cn">37</span>);  <span class="cc">// WiFi ch6  → 2437 MHz</span>
+    radio.<span class="cf">setChannel</span>(<span class="cn">62</span>);  <span class="cc">// WiFi ch11 → 2462 MHz</span>
+  }
+}</pre>
+  </div>
+
+  <!-- STATS -->
+  <div class="row col3">
+    <div class="panel stat-panel">
+      <div class="stat-n">4<span class="u">×</span></div>
+      <div class="stat-lbl">jam modes</div>
+    </div>
+    <div class="panel stat-panel">
+      <div class="stat-n">8<span class="u">MHz</span></div>
+      <div class="stat-lbl">overclocked SPI speed</div>
+    </div>
+    <div class="panel stat-panel">
+      <div class="stat-n">79<span class="u">ch</span></div>
+      <div class="stat-lbl">full sweep range</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="f-sig">© <span>khxngvng</span> — nrf24kxb jammer</div>
+  <div class="f-tags">
+    <span class="f-tag">arduino</span>
+    <span class="f-tag">nrf24l01+</span>
+    <span class="f-tag">rf jamming</span>
+    <span class="f-tag">2.4ghz</span>
+    <span class="f-tag">bluetooth</span>
+    <span class="f-tag">wifi</span>
+    <span class="f-tag">spi</span>
+    <span class="f-tag">i2c</span>
+  </div>
+</footer>
+
+<script>
+// ── SPECTRUM CANVAS VISUALIZER ────────────────────────────────
+const canvas = document.getElementById('specCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width  = rect.width;
+  canvas.height = 220;
+}
+resize();
+window.addEventListener('resize', () => { resize(); });
+
+const FREQ_MIN = 2400;
+const FREQ_MAX = 2505;
+const FREQ_RANGE = FREQ_MAX - FREQ_MIN;
+
+function freqToX(f) {
+  return ((f - FREQ_MIN) / FREQ_RANGE) * canvas.width;
+}
+
+// signal definitions
+const btChannels = [];
+for (let i = 0; i < 79; i++) btChannels.push(2402 + i);
+
+const bleAdv = [2402, 2426, 2480];
+
+const wifiCh = [
+  { center: 2412, width: 22 },
+  { center: 2437, width: 22 },
+  { center: 2462, width: 22 },
+];
+
+let t = 0;
+
+function drawSpectrum() {
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // background grid
+  ctx.strokeStyle = 'rgba(20,32,48,0.8)';
+  ctx.lineWidth = 1;
+  for (let f = 2400; f <= 2510; f += 10) {
+    const x = freqToX(f);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    ctx.fillStyle = 'rgba(50,80,100,0.5)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.fillText(f + '', x + 2, h - 4);
+  }
+
+  // horizontal gridlines
+  ctx.strokeStyle = 'rgba(20,32,48,0.5)';
+  for (let y = 0; y < h; y += h/4) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  const baseY = h - 30;
+
+  // ── wifi channels (broad, green, low) ───────────────────
+  wifiCh.forEach(ch => {
+    const x0 = freqToX(ch.center - ch.width / 2);
+    const x1 = freqToX(ch.center + ch.width / 2);
+    const chW = x1 - x0;
+    const amp = 0.35 + 0.03 * Math.sin(t * 0.8 + ch.center * 0.1);
+    const gh = baseY * amp;
+    const grd = ctx.createLinearGradient(0, baseY - gh, 0, baseY);
+    grd.addColorStop(0, 'rgba(0,255,136,0.0)');
+    grd.addColorStop(0.6, 'rgba(0,255,136,0.18)');
+    grd.addColorStop(1, 'rgba(0,255,136,0.35)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(x0, baseY - gh, chW, gh);
+    ctx.strokeStyle = 'rgba(0,255,136,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, baseY - gh, chW, gh);
+    ctx.fillStyle = 'rgba(0,255,136,0.7)';
+    ctx.font = '9px Share Tech Mono, monospace';
+    ctx.fillText('WiFi', freqToX(ch.center) - 12, baseY - gh - 4);
+  });
+
+  // ── bluetooth sweep (thin cyan lines) ───────────────────
+  btChannels.forEach((f, idx) => {
+    const x = freqToX(f);
+    const noise = Math.sin(t * 2.3 + idx * 0.7) * 0.08;
+    const amp = 0.45 + noise + (idx % 7 === 0 ? 0.08 : 0);
+    const bh = baseY * amp;
+    const grd = ctx.createLinearGradient(0, baseY - bh, 0, baseY);
+    grd.addColorStop(0, 'rgba(0,229,255,0.0)');
+    grd.addColorStop(1, 'rgba(0,229,255,0.25)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(x - 1, baseY - bh, 3, bh);
+    ctx.strokeStyle = 'rgba(0,229,255,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY - bh); ctx.stroke();
+  });
+
+  // ── jammer carrier (bright yellow, tallest) ─────────────
+  const jamPhase = t * 1.5;
+  for (let f = 2400; f <= 2480; f += 1) {
+    const x = freqToX(f);
+    const pulseAmp = 0.7 + 0.15 * Math.sin(jamPhase + f * 0.3) + 0.08 * Math.sin(jamPhase * 3.1 + f * 0.15);
+    const jh = baseY * Math.min(pulseAmp, 0.92);
+    const alpha = 0.12 + 0.06 * Math.sin(jamPhase * 2 + f * 0.2);
+    const grd = ctx.createLinearGradient(0, baseY - jh, 0, baseY);
+    grd.addColorStop(0, `rgba(255,220,0,0.0)`);
+    grd.addColorStop(0.5, `rgba(255,200,0,${alpha})`);
+    grd.addColorStop(1, `rgba(255,180,0,${alpha * 2})`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(x - 0.5, baseY - jh, 2, jh);
+  }
+
+  // ── BLE advertising channels (red, tallest spikes) ──────
+  bleAdv.forEach((f, idx) => {
+    const x = freqToX(f);
+    const spike = 0.82 + 0.1 * Math.sin(t * 3.5 + idx * 2.1);
+    const bh = baseY * spike;
+    const grd = ctx.createLinearGradient(0, baseY - bh, 0, baseY);
+    grd.addColorStop(0, 'rgba(255,34,68,0.9)');
+    grd.addColorStop(0.3, 'rgba(255,34,68,0.5)');
+    grd.addColorStop(1, 'rgba(255,34,68,0.15)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(x - 2, baseY - bh, 5, bh);
+    ctx.strokeStyle = 'rgba(255,80,100,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, baseY); ctx.lineTo(x, baseY - bh); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,100,120,0.95)';
+    ctx.font = 'bold 9px Share Tech Mono, monospace';
+    ctx.fillText('BLE', x - 10, baseY - bh - 6);
+    ctx.fillStyle = 'rgba(255,80,100,0.6)';
+    ctx.font = '8px Share Tech Mono, monospace';
+    const freqLabel = ['37','38','39'][idx];
+    ctx.fillText('CH'+freqLabel, x - 12, baseY - bh - 17);
+  });
+
+  // ── baseline ────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(30,48,70,0.8)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(w, baseY); ctx.stroke();
+
+  // ── axis labels ─────────────────────────────────────────
+  ctx.fillStyle = 'rgba(60,100,130,0.6)';
+  ctx.font = '8px Share Tech Mono, monospace';
+  ctx.fillText('2.400 GHz', freqToX(2400), 14);
+  ctx.fillText('2.450 GHz', freqToX(2450) - 20, 14);
+  ctx.fillText('2.500 GHz', freqToX(2500) - 40, 14);
+
+  t += 0.025;
+  requestAnimationFrame(drawSpectrum);
+}
+
+drawSpectrum();
+</script>
+</body>
+</html>
