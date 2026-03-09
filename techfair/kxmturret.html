@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GYRO-TURRET / khxngvng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080a0c;
+    --bg2: #0d1014;
+    --panel: #10141a;
+    --border: #1e2530;
+    --accent: #e8ff47;
+    --accent2: #47c8ff;
+    --red: #ff3b3b;
+    --dim: #3a4455;
+    --text: #c8d4e0;
+    --text-dim: #5a6a7a;
+    --text-bright: #edf4ff;
+    --glow: rgba(232, 255, 71, 0.12);
+    --glow2: rgba(71, 200, 255, 0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  /* SCANLINES */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    padding: 80px 60px 60px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  header::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    left: -100px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(232,255,71,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .tag-line {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tag-line::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: clamp(52px, 8vw, 110px);
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    color: var(--text-bright);
+    text-transform: uppercase;
+  }
+
+  h1 span {
+    color: var(--accent);
+    -webkit-text-stroke: 0px;
+  }
+
+  h1 .outline {
+    -webkit-text-stroke: 1px var(--dim);
+    color: transparent;
+  }
+
+  .header-meta {
+    display: flex;
+    gap: 40px;
+    margin-top: 32px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .meta-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .meta-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--accent2);
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin-right: 6px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* ── LAYOUT ── */
+  main {
+    padding: 60px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    margin-bottom: 2px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2px;
+    margin-bottom: 2px;
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 28px 32px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .panel:hover {
+    border-color: var(--dim);
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .panel:hover::before {
+    opacity: 0.6;
+  }
+
+  .panel-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .panel-title {
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    color: var(--text-bright);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .panel-body {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 300;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  /* ── SERVO CARDS ── */
+  .servo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2px;
+  }
+
+  .servo-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 24px;
+    position: relative;
+  }
+
+  .servo-wire {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-bottom: 16px;
+    border: 2px solid;
+    position: relative;
+  }
+
+  .servo-wire::after {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.4;
+  }
+
+  .wire-blue { color: #4a8fff; border-color: #4a8fff; }
+  .wire-cyan { color: #47c8ff; border-color: #47c8ff; }
+  .wire-yellow { color: #ffdd47; border-color: #ffdd47; }
+
+  .servo-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    color: var(--text-dim);
+  }
+
+  .servo-axis {
+    font-weight: 700;
+    font-size: 28px;
+    letter-spacing: 0.05em;
+    color: var(--text-bright);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .servo-type {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent2);
+    margin-bottom: 12px;
+  }
+
+  .servo-desc {
+    font-size: 14px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .servo-pin {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(232,255,71,0.08);
+    border: 1px solid rgba(232,255,71,0.2);
+    padding: 3px 8px;
+  }
+
+  /* ── CODE PANEL ── */
+  .code-panel {
+    background: #07090b;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .code-filename {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .code-filename span {
+    color: var(--accent2);
+  }
+
+  .code-dots {
+    display: flex;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .dot-r { background: #ff5f56; }
+  .dot-y { background: #ffbd2e; }
+  .dot-g { background: #27c93f; }
+
+  pre {
+    padding: 28px;
+    overflow-x: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: #7a8fa0;
+    tab-size: 2;
+  }
+
+  .c-comment { color: #3d5066; }
+  .c-keyword { color: #ff7a7a; }
+  .c-type { color: #ffbd5c; }
+  .c-func { color: #47c8ff; }
+  .c-string { color: #a8ff78; }
+  .c-num { color: #e8ff47; }
+  .c-var { color: #c8d4e0; }
+  .c-macro { color: #ff8fa8; }
+
+  /* ── LOGIC TABLE ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+  }
+
+  thead tr {
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    padding: 0 16px 14px 0;
+    font-weight: 400;
+  }
+
+  td {
+    padding: 12px 16px 12px 0;
+    color: var(--text);
+    border-bottom: 1px solid #111820;
+    vertical-align: top;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  td:first-child { color: var(--accent2); }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid;
+  }
+
+  .badge-green { color: #47ff90; border-color: rgba(71,255,144,0.3); background: rgba(71,255,144,0.05); }
+  .badge-yellow { color: var(--accent); border-color: rgba(232,255,71,0.3); background: rgba(232,255,71,0.05); }
+  .badge-blue { color: var(--accent2); border-color: rgba(71,200,255,0.3); background: rgba(71,200,255,0.05); }
+  .badge-red { color: var(--red); border-color: rgba(255,59,59,0.3); background: rgba(255,59,59,0.05); }
+
+  /* ── CONSTANTS PANEL ── */
+  .const-row {
+    display: flex;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid #111820;
+    gap: 16px;
+  }
+
+  .const-row:last-child { border-bottom: none; }
+
+  .const-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    flex: 0 0 240px;
+  }
+
+  .const-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: var(--text-bright);
+    font-weight: 700;
+    flex: 0 0 100px;
+  }
+
+  .const-desc {
+    font-size: 14px;
+    font-weight: 300;
+    color: var(--text-dim);
+    flex: 1;
+  }
+
+  /* ── MODS PANEL ── */
+  .mod-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .mod-item {
+    display: flex;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid #111820;
+    align-items: flex-start;
+  }
+
+  .mod-item:last-child { border-bottom: none; }
+
+  .mod-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    flex: 0 0 28px;
+    padding-top: 2px;
+  }
+
+  .mod-content { flex: 1; }
+
+  .mod-title {
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .mod-body {
+    font-weight: 300;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+
+  /* ── WIRING VISUAL ── */
+  .wire-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .wire-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.02);
+    border-left: 3px solid;
+  }
+
+  .wire-row.blue  { border-color: #4a8fff; }
+  .wire-row.cyan  { border-color: #47c8ff; }
+  .wire-row.yellow { border-color: #ffdd47; }
+  .wire-row.red   { border-color: #ff3b3b; }
+  .wire-row.black { border-color: #444; }
+  .wire-row.white { border-color: #888; }
+
+  .wire-color-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    flex: 0 0 72px;
+    color: var(--text-dim);
+  }
+
+  .wire-arrow {
+    font-size: 14px;
+    color: var(--dim);
+  }
+
+  .wire-dest {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--text-bright);
+  }
+
+  .wire-note {
+    font-size: 13px;
+    font-weight: 300;
+    color: var(--text-dim);
+    flex: 1;
+    text-align: right;
+  }
+
+  /* ── LARGE NUMBER STAT ── */
+  .stat-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .stat-num {
+    font-weight: 900;
+    font-size: 72px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--text-bright);
+  }
+
+  .stat-num .unit {
+    font-size: 32px;
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 30px 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-sig {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+  }
+
+  .footer-sig span { color: var(--accent); }
+
+  .footer-tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .footer-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .panel, .servo-card, .code-panel {
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .panel:nth-child(1) { animation-delay: 0.05s; }
+  .panel:nth-child(2) { animation-delay: 0.10s; }
+  .panel:nth-child(3) { animation-delay: 0.15s; }
+
+  .servo-card:nth-child(1) { animation-delay: 0.1s; }
+  .servo-card:nth-child(2) { animation-delay: 0.15s; }
+  .servo-card:nth-child(3) { animation-delay: 0.2s; }
+
+  /* LIVE READOUT */
+  .readout-panel {
+    background: #07090b;
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .readout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #0e1318;
+    font-size: 12px;
+  }
+
+  .readout-row:last-child { border-bottom: none; }
+
+  .readout-key { color: var(--text-dim); }
+
+  .readout-val {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+  }
+
+  .readout-val.blue { color: var(--accent2); }
+  .readout-val.red { color: var(--red); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--dim); }
+
+  /* RESPONSIVE */
+  @media (max-width: 900px) {
+    header { padding: 40px 24px 40px; }
+    main { padding: 24px; }
+    .grid-2, .grid-3, .servo-grid { grid-template-columns: 1fr; }
+    footer { padding: 24px; }
+    h1 { font-size: 52px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tag-line">project / hardware mod</div>
+  <h1>Gyro<span>-</span><br><span class="outline">Turret</span></h1>
+  <div class="header-meta">
+    <div class="meta-item">
+      <span class="meta-label">author</span>
+      <span class="meta-val">khxngvng</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">base</span>
+      <span class="meta-val">HackPack Turret</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">controller</span>
+      <span class="meta-val">Arduino Uno</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">sensor</span>
+      <span class="meta-val">MPU6050 (6-DOF)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">status</span>
+      <span class="meta-val"><span class="status-dot"></span>operational</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- OVERVIEW ROW -->
+  <div class="grid-2" style="margin-bottom: 2px;">
+    <div class="panel">
+      <div class="panel-label">01 — overview</div>
+      <div class="panel-title">What Was Built</div>
+      <div class="panel-body">
+        stripped the hackpack turret down to its mechanical base — chassis, barrel assembly, and servo mounts. the original arduino and all custom control circuitry was removed entirely. rewired from scratch with an arduino uno as the new brain, an mpu6050 gyroscope+accelerometer for head-tracking control, and a pressure sensor on the trigger. the turret now mirrors head movement in real time: tilt maps pitch, rotation maps yaw, and squeeze fires.
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-label">02 — hardware delta</div>
+      <div class="panel-title">What Changed</div>
+      <div class="mod-list">
+        <div class="mod-item">
+          <span class="mod-num">01</span>
+          <div class="mod-content">
+            <div class="mod-title">MCU Swap</div>
+            <div class="mod-body">hackpack's proprietary board → arduino uno r3. full i2c + pwm access.</div>
+          </div>
+        </div>
+        <div class="mod-item">
+          <span class="mod-num">02</span>
+          <div class="mod-content">
+            <div class="mod-title">Gyro Input Added</div>
+            <div class="mod-body">mpu6050 wired to sda/scl. provides 6-dof motion data at ~100hz via i2c.</div>
+          </div>
+        </div>
+        <div class="mod-item">
+          <span class="mod-num">03</span>
+          <div class="mod-content">
+            <div class="mod-title">Trigger Sensor</div>
+            <div class="mod-body">pressure sensor on a0. analog read maps squeeze force to fire speed.</div>
+          </div>
+        </div>
+        <div class="mod-item">
+          <span class="mod-num">04</span>
+          <div class="mod-content">
+            <div class="mod-title">Full Rewire</div>
+            <div class="mod-body">all servo signal lines relocated to pins 9, 10, 11 (pwm-capable).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVO CARDS -->
+  <div class="servo-grid" style="margin-bottom: 2px;">
+    <div class="servo-card">
+      <div class="servo-pin">PIN 10</div>
+      <div class="servo-wire wire-blue"></div>
+      <div class="servo-name">yaw axis</div>
+      <div class="servo-axis">Left / Right</div>
+      <div class="servo-type">continuous rotation servo — blue wire</div>
+      <div class="servo-desc">driven by gx (gyro x-axis angular velocity). deadzone at ±5000 raw units. writes 105 cw, 75 ccw, 90 to stop. base rotates to follow head turn.</div>
+    </div>
+    <div class="servo-card">
+      <div class="servo-pin">PIN 9</div>
+      <div class="servo-wire wire-cyan"></div>
+      <div class="servo-name">pitch axis</div>
+      <div class="servo-axis">Up / Down</div>
+      <div class="servo-type">180° positional servo — cyan wire</div>
+      <div class="servo-desc">maps ay (accel y-axis) from –17000..17000 directly to 0..180°. constrained to safe range. barrel angle matches physical head tilt continuously.</div>
+    </div>
+    <div class="servo-card">
+      <div class="servo-pin">PIN 11</div>
+      <div class="servo-wire wire-yellow"></div>
+      <div class="servo-name">fire axis</div>
+      <div class="servo-axis">Fire</div>
+      <div class="servo-type">continuous rotation servo — yellow wire</div>
+      <div class="servo-desc">idle at 90. pressure above threshold maps 100..1023 → 110..180 firing speed. variable force control — light squeeze = slow rate, full squeeze = max rate.</div>
+    </div>
+  </div>
+
+  <!-- LOGIC TABLE + CONSTANTS -->
+  <div class="grid-2" style="margin-bottom: 2px;">
+    <div class="panel">
+      <div class="panel-label">03 — control logic</div>
+      <div class="panel-title">Input → Output Map</div>
+      <table>
+        <thead>
+          <tr>
+            <th>input</th>
+            <th>axis</th>
+            <th>output</th>
+            <th>type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ay (accel)</td>
+            <td>pitch</td>
+            <td>map → 0–180°</td>
+            <td><span class="badge badge-blue">positional</span></td>
+          </tr>
+          <tr>
+            <td>gx &gt; 5000</td>
+            <td>yaw</td>
+            <td>write 105 (cw)</td>
+            <td><span class="badge badge-yellow">velocity</span></td>
+          </tr>
+          <tr>
+            <td>gx &lt; -5000</td>
+            <td>yaw</td>
+            <td>write 75 (ccw)</td>
+            <td><span class="badge badge-yellow">velocity</span></td>
+          </tr>
+          <tr>
+            <td>gx in deadzone</td>
+            <td>yaw</td>
+            <td>write 90 (stop)</td>
+            <td><span class="badge badge-green">idle</span></td>
+          </tr>
+          <tr>
+            <td>pressure &gt; 100</td>
+            <td>fire</td>
+            <td>map → 110–180</td>
+            <td><span class="badge badge-red">fire</span></td>
+          </tr>
+          <tr>
+            <td>pressure ≤ 100</td>
+            <td>fire</td>
+            <td>write 90 (stop)</td>
+            <td><span class="badge badge-green">idle</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">04 — tuning values</div>
+      <div class="panel-title">Constants</div>
+      <div class="const-row">
+        <span class="const-name">pressureThreshold</span>
+        <span class="const-val">100</span>
+        <span class="const-desc">minimum analog reading to engage fire servo. raise to debounce.</span>
+      </div>
+      <div class="const-row">
+        <span class="const-name">gyroDeadzone</span>
+        <span class="const-val">5000</span>
+        <span class="const-desc">gx must exceed ±5000 raw units to trigger yaw rotation.</span>
+      </div>
+      <div class="const-row">
+        <span class="const-name">yawServo.attach</span>
+        <span class="const-val">pin 10</span>
+        <span class="const-desc">blue wire — continuous. 90=stop, 75=ccw, 105=cw.</span>
+      </div>
+      <div class="const-row">
+        <span class="const-name">pitchServo.attach</span>
+        <span class="const-val">pin 9</span>
+        <span class="const-desc">cyan wire — 180°. mapped linearly to ay reading.</span>
+      </div>
+      <div class="const-row">
+        <span class="const-name">rollServo.attach</span>
+        <span class="const-val">pin 11</span>
+        <span class="const-desc">yellow wire — continuous. fire speed maps 110–180.</span>
+      </div>
+      <div class="const-row">
+        <span class="const-name">i2c baud</span>
+        <span class="const-val">9600</span>
+        <span class="const-desc">serial debug rate. mpu6050 on sda/scl (a4/a5 on uno).</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- WIRING + READOUT -->
+  <div class="grid-2" style="margin-bottom: 2px;">
+    <div class="panel">
+      <div class="panel-label">05 — wiring</div>
+      <div class="panel-title">Pin Connections</div>
+      <div class="wire-diagram">
+        <div class="wire-row blue">
+          <span class="wire-color-label">blue</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">D10 (PWM)</span>
+          <span class="wire-note">yaw servo / signal</span>
+        </div>
+        <div class="wire-row cyan">
+          <span class="wire-color-label">cyan</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">D9 (PWM)</span>
+          <span class="wire-note">pitch servo / signal</span>
+        </div>
+        <div class="wire-row yellow">
+          <span class="wire-color-label">yellow</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">D11 (PWM)</span>
+          <span class="wire-note">fire servo / signal</span>
+        </div>
+        <div class="wire-row red">
+          <span class="wire-color-label">red</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">5V</span>
+          <span class="wire-note">mpu6050 vcc + servos vcc</span>
+        </div>
+        <div class="wire-row black">
+          <span class="wire-color-label">black</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">GND</span>
+          <span class="wire-note">common ground</span>
+        </div>
+        <div class="wire-row white">
+          <span class="wire-color-label">sda/scl</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">A4 / A5</span>
+          <span class="wire-note">mpu6050 i2c bus</span>
+        </div>
+        <div class="wire-row" style="border-color: #ff9944;">
+          <span class="wire-color-label" style="color: #ff9944;">pressure</span>
+          <span class="wire-arrow">→</span>
+          <span class="wire-dest">A0</span>
+          <span class="wire-note">analog signal pin "S"</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">06 — runtime values</div>
+      <div class="panel-title">Expected Readouts</div>
+      <div class="readout-panel" style="border:none; padding: 0;">
+        <div class="readout-row">
+          <span class="readout-key">mpu6050.testConnection()</span>
+          <span class="readout-val">true</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">ay idle (flat)</span>
+          <span class="readout-val blue">~0</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">ay tilt up</span>
+          <span class="readout-val blue">→ +17000</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">ay tilt down</span>
+          <span class="readout-val blue">→ −17000</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">gx turn right</span>
+          <span class="readout-val">+5000+</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">gx turn left</span>
+          <span class="readout-val">−5000−</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">pressureVal idle</span>
+          <span class="readout-val blue">&lt; 100</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">pressureVal squeeze</span>
+          <span class="readout-val red">100 → 1023</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">fireSpeed range</span>
+          <span class="readout-val red">110 → 180</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-key">i2c address</span>
+          <span class="readout-val">0x68</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FULL CODE PANEL -->
+  <div class="code-panel" style="margin-bottom: 2px;">
+    <div class="code-header">
+      <div class="code-dots">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <div class="code-filename">gyro_turret.ino &nbsp;/ <span>arduino uno</span></div>
+      <div class="code-filename" style="font-size:10px;">mpulib: electronicsmith/MPU6050 &nbsp;·&nbsp; servo: arduino built-in</div>
+    </div>
+    <pre><span class="c-comment">/*
+ * GYRO-TURRET — khxngvng
+ * modded hackpack turret base
+ * arduino uno + mpu6050 + pressure sensor
+ */</span>
+<span class="c-macro">#include</span> <span class="c-string">"Wire.h"</span>
+<span class="c-macro">#include</span> <span class="c-string">"MPU6050.h"</span>
+<span class="c-macro">#include</span> <span class="c-string">"Servo.h"</span>
+
+<span class="c-comment">// ── hardware instances ──────────────────────────</span>
+<span class="c-type">MPU6050</span> <span class="c-var">mpu</span>;
+<span class="c-type">Servo</span>   <span class="c-var">yawServo</span>;    <span class="c-comment">// blue  wire  — continuous rotation</span>
+<span class="c-type">Servo</span>   <span class="c-var">pitchServo</span>;  <span class="c-comment">// cyan  wire  — 180° positional</span>
+<span class="c-type">Servo</span>   <span class="c-var">rollServo</span>;   <span class="c-comment">// yellow wire — continuous rotation (fire)</span>
+
+<span class="c-comment">// ── sensor data ─────────────────────────────────</span>
+<span class="c-type">int16_t</span> <span class="c-var">ax</span>, <span class="c-var">ay</span>, <span class="c-var">az</span>, <span class="c-var">gx</span>, <span class="c-var">gy</span>, <span class="c-var">gz</span>;
+<span class="c-keyword">const</span> <span class="c-type">int</span> <span class="c-var">pressurePin</span> <span class="c-keyword">=</span> <span class="c-num">A0</span>;
+<span class="c-type">int</span> <span class="c-var">pressureVal</span> <span class="c-keyword">=</span> <span class="c-num">0</span>;
+
+<span class="c-comment">// ── tuning ──────────────────────────────────────</span>
+<span class="c-keyword">const</span> <span class="c-type">int</span> <span class="c-var">pressureThreshold</span> <span class="c-keyword">=</span> <span class="c-num">100</span>;  <span class="c-comment">// min pressure to fire</span>
+<span class="c-keyword">const</span> <span class="c-type">int</span> <span class="c-var">gyroDeadzone</span>       <span class="c-keyword">=</span> <span class="c-num">5000</span>; <span class="c-comment">// gx sensitivity threshold</span>
+
+<span class="c-type">void</span> <span class="c-func">setup</span>() {
+  <span class="c-func">Serial.begin</span>(<span class="c-num">9600</span>);
+  <span class="c-func">Wire.begin</span>();
+
+  <span class="c-func">Serial.println</span>(<span class="c-string">"Initializing MPU6050..."</span>);
+  mpu.<span class="c-func">initialize</span>();
+  <span class="c-keyword">if</span> (!mpu.<span class="c-func">testConnection</span>()) {
+    <span class="c-func">Serial.println</span>(<span class="c-string">"MPU6050 connection failed!"</span>);
+  }
+
+  yawServo.<span class="c-func">attach</span>(<span class="c-num">10</span>);    <span class="c-comment">// blue  wire</span>
+  pitchServo.<span class="c-func">attach</span>(<span class="c-num">9</span>);   <span class="c-comment">// cyan  wire</span>
+  rollServo.<span class="c-func">attach</span>(<span class="c-num">11</span>);   <span class="c-comment">// yellow wire</span>
+
+  yawServo.<span class="c-func">write</span>(<span class="c-num">90</span>);    <span class="c-comment">// continuous: 90 = stop</span>
+  pitchServo.<span class="c-func">write</span>(<span class="c-num">90</span>);  <span class="c-comment">// positional: center</span>
+  rollServo.<span class="c-func">write</span>(<span class="c-num">90</span>);   <span class="c-comment">// continuous: 90 = stop</span>
+}
+
+<span class="c-type">void</span> <span class="c-func">loop</span>() {
+
+  <span class="c-comment">// 1. read all sensors ──────────────────────────</span>
+  mpu.<span class="c-func">getMotion6</span>(&amp;<span class="c-var">ax</span>, &amp;<span class="c-var">ay</span>, &amp;<span class="c-var">az</span>, &amp;<span class="c-var">gx</span>, &amp;<span class="c-var">gy</span>, &amp;<span class="c-var">gz</span>);
+  <span class="c-var">pressureVal</span> <span class="c-keyword">=</span> <span class="c-func">analogRead</span>(<span class="c-var">pressurePin</span>);
+
+  <span class="c-comment">// 2. pitch — ay → 0..180° ──────────────────────</span>
+  <span class="c-type">int</span> <span class="c-var">pitchAngle</span> <span class="c-keyword">=</span> <span class="c-func">map</span>(<span class="c-var">ay</span>, <span class="c-num">-17000</span>, <span class="c-num">17000</span>, <span class="c-num">0</span>, <span class="c-num">180</span>);
+  <span class="c-var">pitchAngle</span>   <span class="c-keyword">=</span> <span class="c-func">constrain</span>(<span class="c-var">pitchAngle</span>, <span class="c-num">0</span>, <span class="c-num">180</span>);
+  pitchServo.<span class="c-func">write</span>(<span class="c-var">pitchAngle</span>);
+
+  <span class="c-comment">// 3. yaw — gx deadzone → continuous spin ───────</span>
+  <span class="c-keyword">if</span>      (<span class="c-var">gx</span> <span class="c-keyword">&gt;</span>  <span class="c-var">gyroDeadzone</span>) yawServo.<span class="c-func">write</span>(<span class="c-num">105</span>);  <span class="c-comment">// cw</span>
+  <span class="c-keyword">else if</span> (<span class="c-var">gx</span> <span class="c-keyword">&lt;</span> -<span class="c-var">gyroDeadzone</span>) yawServo.<span class="c-func">write</span>(<span class="c-num">75</span>);   <span class="c-comment">// ccw</span>
+  <span class="c-keyword">else</span>                         yawServo.<span class="c-func">write</span>(<span class="c-num">90</span>);   <span class="c-comment">// stop</span>
+
+  <span class="c-comment">// 4. fire — pressure → variable speed ─────────</span>
+  <span class="c-keyword">if</span> (<span class="c-var">pressureVal</span> <span class="c-keyword">&gt;</span> <span class="c-var">pressureThreshold</span>) {
+    <span class="c-type">int</span> <span class="c-var">fireSpeed</span> <span class="c-keyword">=</span> <span class="c-func">map</span>(<span class="c-var">pressureVal</span>, <span class="c-var">pressureThreshold</span>, <span class="c-num">1023</span>, <span class="c-num">110</span>, <span class="c-num">180</span>);
+    rollServo.<span class="c-func">write</span>(<span class="c-var">fireSpeed</span>);
+  } <span class="c-keyword">else</span> {
+    rollServo.<span class="c-func">write</span>(<span class="c-num">90</span>);  <span class="c-comment">// idle</span>
+  }
+
+  <span class="c-comment">// Serial.print("Pressure: "); Serial.println(pressureVal);</span>
+}</pre>
+  </div>
+
+  <!-- STATS ROW -->
+  <div class="grid-3" style="margin-bottom: 0;">
+    <div class="panel stat-panel">
+      <div class="stat-num">3<span class="unit">×</span></div>
+      <div class="stat-label">servos controlled</div>
+    </div>
+    <div class="panel stat-panel">
+      <div class="stat-num">6<span class="unit">DOF</span></div>
+      <div class="stat-label">mpu6050 sensor axes</div>
+    </div>
+    <div class="panel stat-panel">
+      <div class="stat-num">~100<span class="unit">hz</span></div>
+      <div class="stat-label">i2c poll rate</div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <div class="footer-sig">© <span>khxngvng</span> — gyro-turret mod</div>
+  <div class="footer-tags">
+    <span class="footer-tag">arduino</span>
+    <span class="footer-tag">mpu6050</span>
+    <span class="footer-tag">hardware mod</span>
+    <span class="footer-tag">hackpack</span>
+    <span class="footer-tag">servo control</span>
+    <span class="footer-tag">i2c</span>
+  </div>
+</footer>
+
+</body>
+</html>
